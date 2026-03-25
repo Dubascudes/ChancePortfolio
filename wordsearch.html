@@ -23,25 +23,22 @@
     font-family: 'Roboto', Georgia, sans-serif;
     background: #ffffff;
     color: #222222;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     user-select: none;
     -webkit-user-select: none;
   }
 
   .grid-wrapper {
     position: relative;
-    display: inline-block;
+    width: 100%;
+    height: 100%;
   }
 
   .grid {
     display: grid;
     gap: 0;
     background: #fff;
-    border: 3px solid #222;
-    border-radius: 12px;
-    overflow: hidden;
+    width: 100%;
+    height: 100%;
   }
 
   .cell {
@@ -65,7 +62,7 @@
     color: #fff;
   }
 
-  /* SVG overlay for ellipses */
+  /* SVG overlay for pills */
   .overlay {
     position: absolute;
     top: 0;
@@ -75,7 +72,6 @@
     pointer-events: none;
     z-index: 1;
   }
-
 </style>
 </head>
 <body>
@@ -112,9 +108,8 @@ const WORDS = [
 // Accent colours from the portfolio, cycled per found word
 const ACCENT_COLORS = ['#008124', '#0080FF', '#FF5C00', '#FFC700'];
 
-// Grid dimensions (auto-sized to fit longest word with padding)
-const GRID_PADDING = 4; // extra columns/rows beyond longest word
-const MIN_SIZE = 12;
+// Minimum padding beyond the longest word
+const GRID_PADDING = 4;
 
 // ============================================================
 // GRID GENERATION
@@ -130,14 +125,36 @@ const DIRECTIONS = [
   [-1, -1]  // up-left
 ];
 
-let gridSize, grid, placedWords, cellElements;
+let gridRows, gridCols, grid, placedWords, cellElements;
 let foundWords = new Set();
 let colorIndex = 0;
 
-function generateGrid() {
+function computeGridDimensions() {
   const longest = Math.max(...WORDS.map(w => w.length));
-  gridSize = Math.max(MIN_SIZE, longest + GRID_PADDING);
-  grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(''));
+  const minDim = longest + GRID_PADDING;
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const aspect = w / h;
+
+  // Compute cell size so grid fills the frame
+  // cellSize = min(w / cols, h / rows)
+  // We want cells to be square, so pick rows & cols to match aspect ratio
+  // while both >= minDim
+  if (aspect >= 1) {
+    // wider than tall
+    gridRows = minDim;
+    gridCols = Math.max(minDim, Math.round(gridRows * aspect));
+  } else {
+    // taller than wide
+    gridCols = minDim;
+    gridRows = Math.max(minDim, Math.round(gridCols / aspect));
+  }
+}
+
+function generateGrid() {
+  computeGridDimensions();
+  grid = Array.from({ length: gridRows }, () => Array(gridCols).fill(''));
   placedWords = [];
 
   // Shuffle words so placement order varies
@@ -149,8 +166,8 @@ function generateGrid() {
 
   // Fill blanks with random letters
   const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  for (let r = 0; r < gridSize; r++) {
-    for (let c = 0; c < gridSize; c++) {
+  for (let r = 0; r < gridRows; r++) {
+    for (let c = 0; c < gridCols; c++) {
       if (!grid[r][c]) grid[r][c] = alpha[Math.floor(Math.random() * 26)];
     }
   }
@@ -160,8 +177,8 @@ function placeWord(word) {
   const dirs = [...DIRECTIONS].sort(() => Math.random() - 0.5);
   for (let attempt = 0; attempt < 200; attempt++) {
     const dir = dirs[attempt % dirs.length];
-    const r = Math.floor(Math.random() * gridSize);
-    const c = Math.floor(Math.random() * gridSize);
+    const r = Math.floor(Math.random() * gridRows);
+    const c = Math.floor(Math.random() * gridCols);
     if (canPlace(word, r, c, dir)) {
       doPlace(word, r, c, dir);
       return;
@@ -169,8 +186,8 @@ function placeWord(word) {
   }
   // Force-place with more attempts
   for (const dir of dirs) {
-    for (let r = 0; r < gridSize; r++) {
-      for (let c = 0; c < gridSize; c++) {
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
         if (canPlace(word, r, c, dir)) {
           doPlace(word, r, c, dir);
           return;
@@ -184,7 +201,7 @@ function canPlace(word, r, c, [dr, dc]) {
   for (let i = 0; i < word.length; i++) {
     const nr = r + dr * i;
     const nc = c + dc * i;
-    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) return false;
+    if (nr < 0 || nr >= gridRows || nc < 0 || nc >= gridCols) return false;
     if (grid[nr][nc] && grid[nr][nc] !== word[i]) return false;
   }
   return true;
@@ -204,32 +221,25 @@ function doPlace(word, r, c, [dr, dc]) {
 // ============================================================
 // RENDERING
 // ============================================================
-function computeCellSize() {
-  const border = 6; // 3px border on each side
-  const availW = window.innerWidth - border;
-  const availH = window.innerHeight - border;
-  return Math.floor(Math.min(availW / gridSize, availH / gridSize));
-}
-
 function renderGrid() {
   const gridEl = document.getElementById('grid');
   const overlay = document.getElementById('overlay');
   gridEl.innerHTML = '';
   overlay.innerHTML = '';
 
-  const cellSize = computeCellSize();
-  const fontSize = Math.max(10, cellSize * 0.55);
+  const cellW = window.innerWidth / gridCols;
+  const cellH = window.innerHeight / gridRows;
+  const fontSize = Math.max(10, Math.min(cellW, cellH) * 0.55);
 
-  gridEl.style.gridTemplateColumns = `repeat(${gridSize}, ${cellSize}px)`;
+  gridEl.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+  gridEl.style.gridTemplateRows = `repeat(${gridRows}, 1fr)`;
 
   cellElements = [];
-  for (let r = 0; r < gridSize; r++) {
+  for (let r = 0; r < gridRows; r++) {
     cellElements[r] = [];
-    for (let c = 0; c < gridSize; c++) {
+    for (let c = 0; c < gridCols; c++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
-      cell.style.width = cellSize + 'px';
-      cell.style.height = cellSize + 'px';
       cell.style.fontSize = fontSize + 'px';
       cell.textContent = grid[r][c];
       cell.dataset.row = r;
@@ -254,22 +264,12 @@ let startCell = null;
 let currentCells = [];
 
 function getCellSize() {
-  // Account for possible mobile sizing
   const cell = document.querySelector('.cell');
-  if (!cell) return 44;
-  return cell.offsetWidth;
-}
-
-function getCellCenter(r, c) {
-  const size = getCellSize();
-  return {
-    x: c * size + size / 2,
-    y: r * size + size / 2
-  };
+  if (!cell) return { w: 40, h: 40 };
+  return { w: cell.offsetWidth, h: cell.offsetHeight };
 }
 
 function cellsInLine(r1, c1, r2, c2) {
-  // Return the list of [r,c] pairs from (r1,c1) to (r2,c2) if they form a valid line
   const dr = Math.sign(r2 - r1);
   const dc = Math.sign(c2 - c1);
   const rowDist = Math.abs(r2 - r1);
@@ -291,7 +291,7 @@ function cellsInLine(r1, c1, r2, c2) {
 function getRowCol(e) {
   const gridEl = document.getElementById('grid');
   const rect = gridEl.getBoundingClientRect();
-  const size = getCellSize();
+  const { w, h } = getCellSize();
 
   let clientX, clientY;
   if (e.touches) {
@@ -302,35 +302,32 @@ function getRowCol(e) {
     clientY = e.clientY;
   }
 
-  const c = Math.floor((clientX - rect.left) / size);
-  const r = Math.floor((clientY - rect.top) / size);
+  const c = Math.floor((clientX - rect.left) / w);
+  const r = Math.floor((clientY - rect.top) / h);
 
-  if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return null;
+  if (r < 0 || r >= gridRows || c < 0 || c >= gridCols) return null;
   return [r, c];
 }
 
 function drawSelectionEllipse(cells, color, id) {
   if (cells.length === 0) return;
   const overlay = document.getElementById('overlay');
-  const size = getCellSize();
+  const { w: cellW, h: cellH } = getCellSize();
 
-  // Compute center and dimensions of the pill
-  // Account for the grid border so the pill aligns with the cells
-  const gridEl = document.getElementById('grid');
-  const borderOffset = parseFloat(getComputedStyle(gridEl).borderLeftWidth) || 0;
   const first = cells[0];
   const last = cells[cells.length - 1];
-  const cx = (first[1] + last[1]) / 2 * size + size / 2 + borderOffset;
-  const cy = (first[0] + last[0]) / 2 * size + size / 2 + borderOffset;
+  const cx = (first[1] + last[1]) / 2 * cellW + cellW / 2;
+  const cy = (first[0] + last[0]) / 2 * cellH + cellH / 2;
 
   // Length along the word direction
-  const dx = (last[1] - first[1]) * size;
-  const dy = (last[0] - first[0]) * size;
+  const dx = (last[1] - first[1]) * cellW;
+  const dy = (last[0] - first[0]) * cellH;
   const length = Math.sqrt(dx * dx + dy * dy);
 
-  const pillWidth = length + size * 0.9;  // full span + generous end padding
-  const pillHeight = size * 0.9;          // tall enough to cover a cell
-  const cornerRadius = pillHeight / 2;    // full rounding = pill / stadium shape
+  const minCell = Math.min(cellW, cellH);
+  const pillWidth = length + minCell * 0.9;
+  const pillHeight = minCell * 0.9;
+  const cornerRadius = pillHeight / 2;
 
   // Rotation angle
   const angle = Math.atan2(dy, dx) * 180 / Math.PI;
@@ -371,11 +368,8 @@ function highlightCells(cells, className) {
 }
 
 function checkWord(cells) {
-  const selected = cells.map(([r, c]) => grid[r][c]).join('');
   for (const pw of placedWords) {
     if (foundWords.has(pw.word)) continue;
-    const pwStr = pw.cells.map(([r, c]) => grid[r][c]).join('');
-    // Check if selected cells match this word (exact cell match)
     if (cells.length !== pw.cells.length) continue;
     const fwd = cells.every(([r, c], i) => r === pw.cells[i][0] && c === pw.cells[i][1]);
     const rev = cells.every(([r, c], i) => r === pw.cells[pw.cells.length - 1 - i][0] && c === pw.cells[pw.cells.length - 1 - i][1]);
@@ -403,7 +397,6 @@ function onPointerMove(e) {
   const cells = cellsInLine(startCell[0], startCell[1], pos[0], pos[1]);
   if (!cells) return;
 
-  // Clear previous highlight
   clearSelection();
   currentCells = cells;
   highlightCells(currentCells, 'selecting');
@@ -421,7 +414,7 @@ function onPointerUp(e) {
     colorIndex++;
     foundWords.add(match.word);
 
-    // Draw permanent ellipse
+    // Draw permanent pill
     drawSelectionEllipse(
       currentCells[0][0] === match.cells[0][0] && currentCells[0][1] === match.cells[0][1]
         ? match.cells : [...match.cells].reverse(),
@@ -434,7 +427,6 @@ function onPointerUp(e) {
       cellElements[r][c].classList.add('found');
       cellElements[r][c].classList.remove('selecting');
     }
-
   }
 
   clearSelection();
@@ -457,7 +449,6 @@ function init() {
 
   // Re-render at new size on resize
   window.addEventListener('resize', () => {
-    // Save found state and re-render
     renderGrid();
     // Re-mark found cells and redraw their pills
     let ci = 0;
