@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Search</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Roboto', Georgia, sans-serif;
+    background: #ffffff;
+    color: #222222;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .grid-wrapper {
+    position: relative;
+    display: inline-block;
+  }
+
+  .grid {
+    display: grid;
+    gap: 0;
+    background: #fff;
+    border: 3px solid #222;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .cell {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-family: 'Roboto', monospace;
+    color: #222;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    transition: color 0.2s;
+  }
+
+  .cell.found {
+    color: #fff;
+  }
+
+  .cell.selecting {
+    color: #fff;
+  }
+
+  /* SVG overlay for ellipses */
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    .cell { width: 32px; height: 32px; font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-wrapper">
+  <div class="grid" id="grid"></div>
+  <svg class="overlay" id="overlay"></svg>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION — edit these words to customise the puzzle
+// ============================================================
+const WORDS = [
+  'DESIGN',
+  'COLOR',
+  'ARTIST',
+  'CANVAS',
+  'SKETCH',
+  'PAINT',
+  'STUDIO',
+  'MURAL',
+  'CRAFT',
+  'GALLERY'
+];
+
+// Accent colours from the portfolio, cycled per found word
+const ACCENT_COLORS = ['#008124', '#0080FF', '#FF5C00', '#FFC700'];
+
+// Grid dimensions (auto-sized to fit longest word with padding)
+const GRID_PADDING = 4; // extra columns/rows beyond longest word
+const MIN_SIZE = 12;
+
+// ============================================================
+// GRID GENERATION
+// ============================================================
+const DIRECTIONS = [
+  [0, 1],   // right
+  [1, 0],   // down
+  [0, -1],  // left
+  [-1, 0],  // up
+  [1, 1],   // down-right
+  [1, -1],  // down-left
+  [-1, 1],  // up-right
+  [-1, -1]  // up-left
+];
+
+let gridSize, grid, placedWords, cellElements;
+let foundWords = new Set();
+let colorIndex = 0;
+
+function generateGrid() {
+  const longest = Math.max(...WORDS.map(w => w.length));
+  gridSize = Math.max(MIN_SIZE, longest + GRID_PADDING);
+  grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(''));
+  placedWords = [];
+
+  // Shuffle words so placement order varies
+  const shuffled = [...WORDS].sort(() => Math.random() - 0.5);
+
+  for (const word of shuffled) {
+    placeWord(word);
+  }
+
+  // Fill blanks with random letters
+  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let r = 0; r < gridSize; r++) {
+    for (let c = 0; c < gridSize; c++) {
+      if (!grid[r][c]) grid[r][c] = alpha[Math.floor(Math.random() * 26)];
+    }
+  }
+}
+
+function placeWord(word) {
+  const dirs = [...DIRECTIONS].sort(() => Math.random() - 0.5);
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const dir = dirs[attempt % dirs.length];
+    const r = Math.floor(Math.random() * gridSize);
+    const c = Math.floor(Math.random() * gridSize);
+    if (canPlace(word, r, c, dir)) {
+      doPlace(word, r, c, dir);
+      return;
+    }
+  }
+  // Force-place with more attempts
+  for (const dir of dirs) {
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (canPlace(word, r, c, dir)) {
+          doPlace(word, r, c, dir);
+          return;
+        }
+      }
+    }
+  }
+}
+
+function canPlace(word, r, c, [dr, dc]) {
+  for (let i = 0; i < word.length; i++) {
+    const nr = r + dr * i;
+    const nc = c + dc * i;
+    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) return false;
+    if (grid[nr][nc] && grid[nr][nc] !== word[i]) return false;
+  }
+  return true;
+}
+
+function doPlace(word, r, c, [dr, dc]) {
+  const cells = [];
+  for (let i = 0; i < word.length; i++) {
+    const nr = r + dr * i;
+    const nc = c + dc * i;
+    grid[nr][nc] = word[i];
+    cells.push([nr, nc]);
+  }
+  placedWords.push({ word, cells });
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function renderGrid() {
+  const gridEl = document.getElementById('grid');
+  const overlay = document.getElementById('overlay');
+  gridEl.innerHTML = '';
+  overlay.innerHTML = '';
+  gridEl.style.gridTemplateColumns = `repeat(${gridSize}, 44px)`;
+
+  cellElements = [];
+  for (let r = 0; r < gridSize; r++) {
+    cellElements[r] = [];
+    for (let c = 0; c < gridSize; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.textContent = grid[r][c];
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      gridEl.appendChild(cell);
+      cellElements[r][c] = cell;
+    }
+  }
+
+  // Resize overlay to match grid
+  const rect = gridEl.getBoundingClientRect();
+  overlay.setAttribute('width', gridEl.offsetWidth);
+  overlay.setAttribute('height', gridEl.offsetHeight);
+  overlay.style.width = gridEl.offsetWidth + 'px';
+  overlay.style.height = gridEl.offsetHeight + 'px';
+}
+
+// ============================================================
+// SELECTION / INTERACTION
+// ============================================================
+let isDragging = false;
+let startCell = null;
+let currentCells = [];
+
+function getCellSize() {
+  // Account for possible mobile sizing
+  const cell = document.querySelector('.cell');
+  if (!cell) return 44;
+  return cell.offsetWidth;
+}
+
+function getCellCenter(r, c) {
+  const size = getCellSize();
+  return {
+    x: c * size + size / 2,
+    y: r * size + size / 2
+  };
+}
+
+function cellsInLine(r1, c1, r2, c2) {
+  // Return the list of [r,c] pairs from (r1,c1) to (r2,c2) if they form a valid line
+  const dr = Math.sign(r2 - r1);
+  const dc = Math.sign(c2 - c1);
+  const rowDist = Math.abs(r2 - r1);
+  const colDist = Math.abs(c2 - c1);
+
+  // Must be a straight line: horizontal, vertical, or 45-degree diagonal
+  if (rowDist !== colDist && rowDist !== 0 && colDist !== 0) return null;
+
+  const steps = Math.max(rowDist, colDist);
+  if (steps === 0) return [[r1, c1]];
+
+  const cells = [];
+  for (let i = 0; i <= steps; i++) {
+    cells.push([r1 + dr * i, c1 + dc * i]);
+  }
+  return cells;
+}
+
+function getRowCol(e) {
+  const gridEl = document.getElementById('grid');
+  const rect = gridEl.getBoundingClientRect();
+  const size = getCellSize();
+
+  let clientX, clientY;
+  if (e.touches) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
+  const c = Math.floor((clientX - rect.left) / size);
+  const r = Math.floor((clientY - rect.top) / size);
+
+  if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return null;
+  return [r, c];
+}
+
+function drawSelectionEllipse(cells, color, id) {
+  if (cells.length === 0) return;
+  const overlay = document.getElementById('overlay');
+  const size = getCellSize();
+
+  // Compute center and dimensions of the pill
+  // Account for the grid border so the pill aligns with the cells
+  const gridEl = document.getElementById('grid');
+  const borderOffset = parseFloat(getComputedStyle(gridEl).borderLeftWidth) || 0;
+  const first = cells[0];
+  const last = cells[cells.length - 1];
+  const cx = (first[1] + last[1]) / 2 * size + size / 2 + borderOffset;
+  const cy = (first[0] + last[0]) / 2 * size + size / 2 + borderOffset;
+
+  // Length along the word direction
+  const dx = (last[1] - first[1]) * size;
+  const dy = (last[0] - first[0]) * size;
+  const length = Math.sqrt(dx * dx + dy * dy);
+
+  const pillWidth = length + size * 0.9;  // full span + generous end padding
+  const pillHeight = size * 0.9;          // tall enough to cover a cell
+  const cornerRadius = pillHeight / 2;    // full rounding = pill / stadium shape
+
+  // Rotation angle
+  const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+  // Remove old shape if updating
+  const old = document.getElementById(id);
+  if (old) old.remove();
+
+  const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  pill.setAttribute('id', id);
+  pill.setAttribute('x', cx - pillWidth / 2);
+  pill.setAttribute('y', cy - pillHeight / 2);
+  pill.setAttribute('width', pillWidth);
+  pill.setAttribute('height', pillHeight);
+  pill.setAttribute('rx', cornerRadius);
+  pill.setAttribute('ry', cornerRadius);
+  pill.setAttribute('fill', color);
+  pill.setAttribute('opacity', '0.85');
+  pill.setAttribute('transform', `rotate(${angle} ${cx} ${cy})`);
+  overlay.appendChild(pill);
+}
+
+function clearSelection() {
+  const old = document.getElementById('sel-active');
+  if (old) old.remove();
+  for (const [r, c] of currentCells) {
+    if (!cellElements[r][c].classList.contains('found')) {
+      cellElements[r][c].classList.remove('selecting');
+    }
+  }
+  currentCells = [];
+}
+
+function highlightCells(cells, className) {
+  for (const [r, c] of cells) {
+    cellElements[r][c].classList.add(className);
+  }
+}
+
+function checkWord(cells) {
+  const selected = cells.map(([r, c]) => grid[r][c]).join('');
+  for (const pw of placedWords) {
+    if (foundWords.has(pw.word)) continue;
+    const pwStr = pw.cells.map(([r, c]) => grid[r][c]).join('');
+    // Check if selected cells match this word (exact cell match)
+    if (cells.length !== pw.cells.length) continue;
+    const fwd = cells.every(([r, c], i) => r === pw.cells[i][0] && c === pw.cells[i][1]);
+    const rev = cells.every(([r, c], i) => r === pw.cells[pw.cells.length - 1 - i][0] && c === pw.cells[pw.cells.length - 1 - i][1]);
+    if (fwd || rev) return pw;
+  }
+  return null;
+}
+
+function onPointerDown(e) {
+  const pos = getRowCol(e);
+  if (!pos) return;
+  isDragging = true;
+  startCell = pos;
+  currentCells = [pos];
+  highlightCells(currentCells, 'selecting');
+  drawSelectionEllipse(currentCells, '#222', 'sel-active');
+  e.preventDefault();
+}
+
+function onPointerMove(e) {
+  if (!isDragging) return;
+  const pos = getRowCol(e);
+  if (!pos) return;
+
+  const cells = cellsInLine(startCell[0], startCell[1], pos[0], pos[1]);
+  if (!cells) return;
+
+  // Clear previous highlight
+  clearSelection();
+  currentCells = cells;
+  highlightCells(currentCells, 'selecting');
+  drawSelectionEllipse(currentCells, '#222', 'sel-active');
+  e.preventDefault();
+}
+
+function onPointerUp(e) {
+  if (!isDragging) return;
+  isDragging = false;
+
+  const match = checkWord(currentCells);
+  if (match) {
+    const color = ACCENT_COLORS[colorIndex % ACCENT_COLORS.length];
+    colorIndex++;
+    foundWords.add(match.word);
+
+    // Draw permanent ellipse
+    drawSelectionEllipse(
+      currentCells[0][0] === match.cells[0][0] && currentCells[0][1] === match.cells[0][1]
+        ? match.cells : [...match.cells].reverse(),
+      color,
+      'found-' + match.word
+    );
+
+    // Mark cells
+    for (const [r, c] of match.cells) {
+      cellElements[r][c].classList.add('found');
+      cellElements[r][c].classList.remove('selecting');
+    }
+
+  }
+
+  clearSelection();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  generateGrid();
+  renderGrid();
+
+  const gridEl = document.getElementById('grid');
+  gridEl.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+  gridEl.addEventListener('touchstart', onPointerDown, { passive: false });
+  window.addEventListener('touchmove', onPointerMove, { passive: false });
+  window.addEventListener('touchend', onPointerUp);
+
+  // Handle resize
+  window.addEventListener('resize', () => {
+    const overlay = document.getElementById('overlay');
+    const gridEl = document.getElementById('grid');
+    overlay.setAttribute('width', gridEl.offsetWidth);
+    overlay.setAttribute('height', gridEl.offsetHeight);
+  });
+}
+
+init();
+</script>
+</body>
+</html>
