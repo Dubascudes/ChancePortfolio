@@ -13,15 +13,19 @@
     box-sizing: border-box;
   }
 
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     font-family: 'Roboto', Georgia, sans-serif;
     background: #ffffff;
     color: #222222;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    min-height: 100vh;
-    padding: 2rem 1rem;
+    justify-content: center;
     user-select: none;
     -webkit-user-select: none;
   }
@@ -41,12 +45,9 @@
   }
 
   .cell {
-    width: 44px;
-    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
     font-weight: 700;
     font-family: 'Roboto', monospace;
     color: #222;
@@ -75,10 +76,6 @@
     z-index: 1;
   }
 
-  /* Mobile */
-  @media (max-width: 600px) {
-    .cell { width: 32px; height: 32px; font-size: 1rem; }
-  }
 </style>
 </head>
 <body>
@@ -207,12 +204,23 @@ function doPlace(word, r, c, [dr, dc]) {
 // ============================================================
 // RENDERING
 // ============================================================
+function computeCellSize() {
+  const border = 6; // 3px border on each side
+  const availW = window.innerWidth - border;
+  const availH = window.innerHeight - border;
+  return Math.floor(Math.min(availW / gridSize, availH / gridSize));
+}
+
 function renderGrid() {
   const gridEl = document.getElementById('grid');
   const overlay = document.getElementById('overlay');
   gridEl.innerHTML = '';
   overlay.innerHTML = '';
-  gridEl.style.gridTemplateColumns = `repeat(${gridSize}, 44px)`;
+
+  const cellSize = computeCellSize();
+  const fontSize = Math.max(10, cellSize * 0.55);
+
+  gridEl.style.gridTemplateColumns = `repeat(${gridSize}, ${cellSize}px)`;
 
   cellElements = [];
   for (let r = 0; r < gridSize; r++) {
@@ -220,6 +228,9 @@ function renderGrid() {
     for (let c = 0; c < gridSize; c++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
+      cell.style.width = cellSize + 'px';
+      cell.style.height = cellSize + 'px';
+      cell.style.fontSize = fontSize + 'px';
       cell.textContent = grid[r][c];
       cell.dataset.row = r;
       cell.dataset.col = c;
@@ -229,7 +240,6 @@ function renderGrid() {
   }
 
   // Resize overlay to match grid
-  const rect = gridEl.getBoundingClientRect();
   overlay.setAttribute('width', gridEl.offsetWidth);
   overlay.setAttribute('height', gridEl.offsetHeight);
   overlay.style.width = gridEl.offsetWidth + 'px';
@@ -445,12 +455,22 @@ function init() {
   window.addEventListener('touchmove', onPointerMove, { passive: false });
   window.addEventListener('touchend', onPointerUp);
 
-  // Handle resize
+  // Re-render at new size on resize
   window.addEventListener('resize', () => {
-    const overlay = document.getElementById('overlay');
-    const gridEl = document.getElementById('grid');
-    overlay.setAttribute('width', gridEl.offsetWidth);
-    overlay.setAttribute('height', gridEl.offsetHeight);
+    // Save found state and re-render
+    renderGrid();
+    // Re-mark found cells and redraw their pills
+    let ci = 0;
+    for (const pw of placedWords) {
+      if (foundWords.has(pw.word)) {
+        const color = ACCENT_COLORS[ci % ACCENT_COLORS.length];
+        ci++;
+        for (const [r, c] of pw.cells) {
+          cellElements[r][c].classList.add('found');
+        }
+        drawSelectionEllipse(pw.cells, color, 'found-' + pw.word);
+      }
+    }
   });
 }
 
