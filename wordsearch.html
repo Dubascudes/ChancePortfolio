@@ -314,14 +314,19 @@ function drawSelectionEllipse(cells, color, id) {
   const overlay = document.getElementById('overlay');
   const { w: cellW, h: cellH } = getCellSize();
 
-  const first = cells[0];
-  const last = cells[cells.length - 1];
-  const cx = (first[1] + last[1]) / 2 * cellW + cellW / 2;
-  const cy = (first[0] + last[0]) / 2 * cellH + cellH / 2;
+  // Use actual DOM positions to avoid accumulated rounding error
+  const firstEl = cellElements[cells[0][0]][cells[0][1]];
+  const lastEl = cellElements[cells[cells.length - 1][0]][cells[cells.length - 1][1]];
+  const firstX = firstEl.offsetLeft + firstEl.offsetWidth / 2;
+  const firstY = firstEl.offsetTop + firstEl.offsetHeight / 2;
+  const lastX = lastEl.offsetLeft + lastEl.offsetWidth / 2;
+  const lastY = lastEl.offsetTop + lastEl.offsetHeight / 2;
 
-  // Length along the word direction in pixels
-  const dx = (last[1] - first[1]) * cellW;
-  const dy = (last[0] - first[0]) * cellH;
+  const cx = (firstX + lastX) / 2;
+  const cy = (firstY + lastY) / 2;
+
+  const dx = lastX - firstX;
+  const dy = lastY - firstY;
   const length = Math.sqrt(dx * dx + dy * dy);
 
   // Rotation angle
