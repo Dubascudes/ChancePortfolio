@@ -426,6 +426,9 @@ function onPointerUp(e) {
     colorIndex++;
     foundWords.add(match.word);
 
+    // Notify parent page that a word was found
+    window.parent.postMessage({ type: 'wordFound', word: match.word }, '*');
+
     // Draw permanent pill
     drawSelectionEllipse(
       currentCells[0][0] === match.cells[0][0] && currentCells[0][1] === match.cells[0][1]
