@@ -131,26 +131,8 @@ let foundWords = new Set();
 let colorIndex = 0;
 
 function computeGridDimensions() {
-  const longest = Math.max(...WORDS.map(w => w.length));
-  const minDim = longest + GRID_PADDING;
-
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const aspect = w / h;
-
-  // Compute cell size so grid fills the frame
-  // cellSize = min(w / cols, h / rows)
-  // We want cells to be square, so pick rows & cols to match aspect ratio
-  // while both >= minDim
-  if (aspect >= 1) {
-    // wider than tall
-    gridRows = minDim;
-    gridCols = Math.max(minDim, Math.round(gridRows * aspect));
-  } else {
-    // taller than wide
-    gridCols = minDim;
-    gridRows = Math.max(minDim, Math.round(gridCols / aspect));
-  }
+  gridRows = 15;
+  gridCols = 15;
 }
 
 function generateGrid() {
